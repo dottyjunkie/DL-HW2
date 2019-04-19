@@ -19,12 +19,6 @@ class DNN():
                                         in_size=68,
                                         out_size=classes)
 
-        # epsilon = 1e-30
-        # self.loss = tf.reduce_mean(
-        #                 -tf.reduce_sum(
-        #                     self.ys*tf.log(self.prediction+epsilon), reduction_indices=[-1]
-        #                 )
-        #             )
         self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.ys, logits=self.prediction)
     
         # self.train_step = tf.train.GradientDescentOptimizer(0.5).minimize(self.loss)
@@ -46,11 +40,11 @@ class DNN():
         
         return outputs
 
-    def train(self, X, y, iter_times=2000):
+    def train(self, X, y, iter_times=1000):
         for i in range(iter_times):
             self.sess.run(self.train_step, feed_dict={self.xs:X, self.ys:y})
             # loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
-            # print("Iter {}:{}".format(i, loss ))
+            # print("Iter {} avg cross entropy:{}".format(i, np.mean(loss) ))
         loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
         return loss
         
@@ -59,19 +53,25 @@ class DNN():
         loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
         return loss
 
-    def prediction(self, X):
-        pass
+    def predict(self, X):
+        predicted_value = self.sess.run(self.prediction, feed_dict={self.xs: X})
+        y = np.argmax(predicted_value, axis=1)
+        return y
+
+    def get_accuracy(self, predicted_y, real_y):
+        batch_size = len(predicted_y)
+        errors = 0.0
+        for i in range(batch_size):
+            if predicted_y[i] != real_y[i]:
+                errors += 1
+        return 1 - errors/batch_size
+
+
 
 
 
 def train_test_split(raw, random_state=42):
-    """
-    Parameters:
-
-    Returns:
-    """
     entries = raw.columns
-
     want = raw[entries]
 
     train = want.sample(frac=.8, random_state=random_state)
@@ -101,3 +101,7 @@ if __name__ == "__main__":
     test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
                             y=y_test.values.astype(np.float32))
     print("Test avg cross entropy:{}".format(np.mean(test_loss)))
+
+    predicted_class = dnn.predict(X_test)
+    real_class = np.argmax(y_test.values, axis=1)
+    print(dnn.get_accuracy(predicted_class, real_class))
