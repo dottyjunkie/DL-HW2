@@ -1,6 +1,7 @@
 #%%
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from collections import namedtuple
@@ -137,33 +138,59 @@ def train_test_split(raw, random_state=42):
     entries = raw.columns
     want = raw[entries]
 
-    # train = want.sample(frac=.8, random_state=random_state)
-    train = want.sample(frac=.8)
+    train = want.sample(frac=.8, random_state=random_state)
+    # train = want.sample(frac=.8)
     y_train = train[['Activities_Types']]
     y_train = pd.get_dummies(y_train, columns=['Activities_Types'])
     X_train = train.drop(columns=['Activities_Types'])
     X_train = (X_train - X_train.mean()) / X_train.std()
+    # X_train = (X_train - X_train.mean())
 
     test = want.drop(train.index)
     y_test = test[['Activities_Types']]
     y_test = pd.get_dummies(y_test, columns=['Activities_Types'])
     X_test = test.drop(columns=['Activities_Types'])
     X_test = (X_test - X_test.mean()) / X_test.std()
+    # X_test = (X_test - X_test.mean())
 
     return (X_train, X_test, y_train, y_test)
 
 
-def PCA(X, y, n=2):
-    covMat = np.cov(X ,rowvar=0)
-    eigVals, eigVects = np.linalg.eig(np.mat(covMat))
-    W = eigVects[:n]
-    low_dim = X*W.T
+def PCA(X, y, n=2, raw=None):
+    if raw != None:
+        entries = raw.columns
+        want = raw[entries]
+        X = want.drop(columns=['Activities_Types'])
+        y = want[['Activities_Types']]    
+        X = X.values
+        y = y.values
+    else:
+        X = X.values
+        y = np.argmax(y.values, axis=1)
 
     [batch_size, features] = X.shape
-    plt.scatter(low_dim[0, 0], low_dim[0, 1], label='class {}'.format(y[0]))
-    # for i in range(batch_size):
-        # plt.scatter(low_dim[i, 0], low_dim[i, 1], label='class {}'.format(y[i]))
-    plt.legend(loc='best')
+
+    covMat = np.cov(X, rowvar=0)
+    eigVals, eigVects = np.linalg.eig(np.mat(covMat))
+    idx = eigVals.argsort()[::-1]
+    W = eigVects[:, idx[:n]]
+    low_dim = X*W
+
+    # colors = ['red','green','blue','cyan','purple','yellow']
+    colors = ['red','cyan','yellow','green','purple','blue']
+    groups = ['dws','ups','sit','std','wlk','jog']
+    for i in range(batch_size):
+        label = np.asscalar(y[i])
+
+        plt.scatter(low_dim[i, 0],
+                    low_dim[i, 1],
+                    c=colors[label-1],
+                    label=groups[label-1],
+                    s=10)
+    plt.show()
+
+def tSNE():
+    pass
 
 
 
@@ -171,10 +198,7 @@ if __name__ == "__main__":
     raw = pd.read_csv('Data.csv')
     X_train, X_test, y_train, y_test = train_test_split(raw)
 
-
-    PCA(X=X_train.values.astype(np.float32),
-        y=X_train.values.astype(np.float32),
-        n=2)
+    PCA(X=X_test, y=y_test, n=2)
 
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
