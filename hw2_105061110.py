@@ -15,14 +15,19 @@ class DNN():
                                 out_size=68,
                                 activation_function=tf.nn.relu)
         
-        self.prediction = self.add_layer(self.l1,
+        self.l2 = self.add_layer(self.l1,
+                                in_size=68,
+                                out_size=68,
+                                activation_function=tf.nn.relu)
+
+        self.prediction = self.add_layer(self.l2,
                                         in_size=68,
                                         out_size=classes)
 
         self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.ys, logits=self.prediction)
     
         # self.train_step = tf.train.GradientDescentOptimizer(0.5).minimize(self.loss)
-        self.train_step = tf.train.AdamOptimizer(0.01).minimize(self.loss)
+        self.train_step = tf.train.AdamOptimizer(0.02).minimize(self.loss)
 
         self.init = init = tf.global_variables_initializer()
         self.sess = tf.Session()
@@ -40,11 +45,25 @@ class DNN():
         
         return outputs
 
-    def train(self, X, y, iter_times=1000):
-        for i in range(iter_times):
-            self.sess.run(self.train_step, feed_dict={self.xs:X, self.ys:y})
-            # loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
-            # print("Iter {} avg cross entropy:{}".format(i, np.mean(loss) ))
+    def train(self, X, y, epochs=1000, batch_size=128):
+        total_size, features = X.shape
+
+        for i in range(epochs):
+            pairs = np.column_stack((X, y))
+            np.random.shuffle(pairs)
+            X = pairs[:, :68]
+            y = pairs[:, 68:]
+
+            for b in range(int(total_size/batch_size)):
+                # print("Batch {}".format(b))
+                X_batch = X[b*batch_size:(b+1)*batch_size, :]
+                y_batch = y[b*batch_size:(b+1)*batch_size, :]
+                self.sess.run(self.train_step, feed_dict={self.xs:X_batch, self.ys:y_batch})
+
+            # if i%10 == 0:        
+            #     loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
+            #     print("Epoch {} avg cross entropy:{}".format(i, np.mean(loss) ))
+
         loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
         return loss
         
@@ -66,6 +85,8 @@ class DNN():
                 errors += 1
         return 1 - errors/batch_size
 
+    def 
+
 
 
 
@@ -74,7 +95,8 @@ def train_test_split(raw, random_state=42):
     entries = raw.columns
     want = raw[entries]
 
-    train = want.sample(frac=.8, random_state=random_state)
+    # train = want.sample(frac=.8, random_state=random_state)
+    train = want.sample(frac=.8)
     y_train = train[['Activities_Types']]
     y_train = pd.get_dummies(y_train, columns=['Activities_Types'])
     X_train = train.drop(columns=['Activities_Types'])
@@ -95,13 +117,15 @@ if __name__ == "__main__":
     dnn = DNN(features=68, classes=6)
     train_loss = dnn.train( X=X_train.values.astype(np.float32),
                             y=y_train.values.astype(np.float32),
-                            iter_times=100)
+                            epochs=100)
     print("Train avg cross entropy:{}".format(np.mean(train_loss)))
 
     test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
                             y=y_test.values.astype(np.float32))
     print("Test avg cross entropy:{}".format(np.mean(test_loss)))
 
-    predicted_class = dnn.predict(X_test)
-    real_class = np.argmax(y_test.values, axis=1)
-    print(dnn.get_accuracy(predicted_class, real_class))
+    train_acc = dnn.get_accuracy(dnn.predict(X_train), np.argmax(y_train.values, axis=1)) 
+    print("Train accuracy:{}".format(train_acc))
+    
+    test_acc = dnn.get_accuracy(dnn.predict(X_test), np.argmax(y_test.values, axis=1))
+    print("Test accuracy:{}".format(test_acc))
