@@ -157,7 +157,7 @@ def train_test_split(raw, random_state=42):
 
 
 def PCA(X, y, n=2, raw=None):
-    if raw != None:
+    if raw is not None:
         entries = raw.columns
         want = raw[entries]
         X = want.drop(columns=['Activities_Types'])
@@ -188,9 +188,76 @@ def PCA(X, y, n=2, raw=None):
                     label=groups[label-1],
                     s=10)
     plt.show()
+    return low_dim
 
-def tSNE():
-    pass
+def tSNE(X):
+    def get_pairwise_dist(X):
+        # [batch_size, _] = X.shape
+        # dist = np.zeros((batch_size, batch_size))
+        # for i in range(batch_size):
+        #     for j in range(batch_size):
+        #         dist[i][j] = np.linalg.norm(X[i] - X[j])
+        # return dist
+        return np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
+    
+    def get_perplexity(prob_i):
+        # entropy_i = -np.dot(prob_i, np.log2(prob_i))
+        # return 2**entropy_i
+        P = np.exp(-D.copy() * beta)
+        sumP = sum(P)
+        H = np.log(sumP) + beta * np.sum(D * P) / sumP
+        P = P / sumP
+        return H, P
+
+    def get_conditional_prob(i, dist_i, sigma_i):
+        # prob = np.exp(-(dist_i**2) / (2*sigma_i))
+        # prob[i] = 1e-50
+        # prob = prob / np.sum(prob)
+        # return prob
+        return np.exp(-D.copy() * beta)
+
+
+    def opt_prob(X, perplexity=30.0):
+        [batch_size, features] = X.shape
+        dist = get_pairwise_dist(X)
+        sigma = np.ones((batch_size, 1))
+        prob = np.zeros((batch_size, batch_size)) # prob[i][j] = P(J=j|I=i)
+
+        for i in range(3):
+            print("The {}th sigma".format(i))
+            prob[i, :] = get_conditional_prob(i, dist[i, :], sigma[i])
+            perplexity_i = get_perplexity(prob[i,:])
+            diff = perplexity - perplexity_i
+            # print(perplexity_i)
+            sigma_max = np.inf
+            sigma_min = -np.inf
+            tolerance = 1e-5
+            maxIter = 100
+            tries = 0
+            while abs(diff) > tolerance and tries < maxIter:
+                print(perplexity_i)
+                if diff > 0:
+                    sigma_min = sigma[i].copy()
+                    if sigma_max == np.inf or sigma_min == -np.inf:
+                        sigma[i] = sigma[i] * 2
+                    else:
+                        sigma[i] = (sigma[i] + sigma_max) / 2
+                else:
+                    sigma_max = sigma[i].copy()
+                    if sigma_max == np.inf or sigma_min == -np.inf:
+                        sigma[i] = sigma[i] / 2
+                    else:
+                        sigma[i] = (sigma[i] + sigma_min) / 2
+                prob[i, :] = get_conditional_prob(i, dist[i, :], sigma[i])
+                perplexity_i = get_perplexity(prob[i,:])
+                diff = perplexity_i - perplexity
+                tries += 1
+        return prob
+
+    
+
+    if __name__ == "__main__":
+        opt_prob(X)
 
 
 
@@ -198,7 +265,9 @@ if __name__ == "__main__":
     raw = pd.read_csv('Data.csv')
     X_train, X_test, y_train, y_test = train_test_split(raw)
 
-    PCA(X=X_test, y=y_test, n=2)
+    # low_dim_X = PCA(X=X_test, y=y_test, n=2)
+    low_dim_X = np.array([[1, 2], [2, 3], [3, 4]])
+    tSNE(X=low_dim_X)
 
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
