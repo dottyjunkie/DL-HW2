@@ -192,13 +192,11 @@ def PCA(X, y, n=2, raw=None):
 
 def tSNE(X):
     def get_pairwise_dist(X):
-        # [batch_size, _] = X.shape
-        # dist = np.zeros((batch_size, batch_size))
-        # for i in range(batch_size):
-        #     for j in range(batch_size):
-        #         dist[i][j] = np.linalg.norm(X[i] - X[j])
-        # return dist
         return np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
+    
+    def get_conditional_prob(dist, sigma):
+        P = np.exp(-dist.copy() * sigma)
+        return  P/sum(P)
     
     def get_perplexity(prob_i):
         # entropy_i = -np.dot(prob_i, np.log2(prob_i))
@@ -209,12 +207,6 @@ def tSNE(X):
         P = P / sumP
         return H, P
 
-    def get_conditional_prob(i, dist_i, sigma_i):
-        # prob = np.exp(-(dist_i**2) / (2*sigma_i))
-        # prob[i] = 1e-50
-        # prob = prob / np.sum(prob)
-        # return prob
-        return np.exp(-D.copy() * beta)
 
 
     def opt_prob(X, perplexity=30.0):
@@ -225,14 +217,14 @@ def tSNE(X):
 
         for i in range(3):
             print("The {}th sigma".format(i))
-            prob[i, :] = get_conditional_prob(i, dist[i, :], sigma[i])
+            prob = get_conditional_prob(dist)
             perplexity_i = get_perplexity(prob[i,:])
             diff = perplexity - perplexity_i
             # print(perplexity_i)
             sigma_max = np.inf
             sigma_min = -np.inf
             tolerance = 1e-5
-            maxIter = 100
+            maxIter = 20
             tries = 0
             while abs(diff) > tolerance and tries < maxIter:
                 print(perplexity_i)
