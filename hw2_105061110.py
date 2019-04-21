@@ -13,14 +13,14 @@ class DNN():
     def __init__(self, features, classes, optimizer, learning_rate):
         self.xs = tf.placeholder(tf.float32, [None, features])
         self.ys = tf.placeholder(tf.float32, [None, classes])
-
-        self.l1 = self.add_layer(self.xs,
-                                in_size=features,
-                                out_size=68,
-                                activation_function=tf.nn.relu)
-        
+       
 
         if optimizer == 'Adam':
+            self.l1 = self.add_layer(self.xs,
+                                    in_size=features,
+                                    out_size=68,
+                                    activation_function=tf.nn.relu)
+
             self.l2 = self.add_layer(self.l1,
                                     in_size=68,
                                     out_size=68,
@@ -28,22 +28,32 @@ class DNN():
             
             self.prediction = self.add_layer(self.l2,
                                             in_size=68,
-                                            out_size=classes)                                    
+                                            out_size=classes
+                                            # ,activation_function=tf.nn.softmax
+                                            )                                    
             self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.ys, logits=self.prediction)
+            # self.loss = tf.reduce_mean(-tf.reduce_sum(self.ys * tf.log(self.prediction+1e-30), reduction_indices=[1]))
             self.train_step = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
 
         elif optimizer == 'GradientDescent':
+            self.l1 = self.add_layer(self.xs,
+                                    in_size=features,
+                                    out_size=34,
+                                    activation_function=tf.nn.relu)
+
             self.prediction = self.add_layer(self.l1,
-                                            in_size=68,
-                                            out_size=classes,
-                                            activation_function=tf.nn.softmax)
+                                            in_size=34,
+                                            out_size=classes
+                                            ,activation_function=tf.nn.softmax
+                                            )
             # self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.ys, logits=self.prediction)
-            self.loss = tf.reduce_mean(-tf.reduce_sum(self.ys * tf.log(self.prediction+1e-20), reduction_indices=[1]))
+            self.loss = tf.reduce_mean(-tf.reduce_sum(self.ys * tf.log(self.prediction+1e-30), reduction_indices=[1]))
             self.train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
     
 
         self.init = init = tf.global_variables_initializer()
-        self.sess = tf.Session()
+        self.gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=self.gpu_options))
         self.sess.run(init)
     
     def add_layer(self, inputs, in_size, out_size, activation_function=None):
@@ -58,9 +68,16 @@ class DNN():
         
         return outputs
 
-    def train(self, X, y, epochs=1000, batch_size=128):
+    def train(self, X, y, X_validate, y_validate, epochs=1000, batch_size=128):
         total_size, features = X.shape
         loss = np.zeros((epochs, 1))
+        loss_validate = np.zeros((epochs, 1))
+        acc = np.zeros((epochs, 1))
+        acc_validate = np.zeros((epochs, 1))
+        X_whole = X.copy()
+        y_whole = y.copy()
+        y_train_class = np.argmax(y_whole, axis=1)
+        y_test_class = np.argmax(y_validate, axis=1)
 
         for i in range(epochs):
             pairs = np.column_stack((X, y))
@@ -74,12 +91,11 @@ class DNN():
                 y_batch = y[b*batch_size:(b+1)*batch_size, :]
                 self.sess.run(self.train_step, feed_dict={self.xs:X_batch, self.ys:y_batch})
 
-            # if i%10 == 0:        
-            #     loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
-            #     print("Epoch {} avg cross entropy:{}".format(i, np.mean(loss) ))
-
-            loss[i] = np.mean(self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y}))
-        return loss
+            loss[i] = np.mean(self.sess.run(self.loss, feed_dict={self.xs:X_whole, self.ys:y_whole}))
+            loss_validate[i] = np.mean(self.sess.run(self.loss, feed_dict={self.xs:X_validate, self.ys:y_validate}))
+            acc[i] = self.get_accuracy(predicted_y=self.predict(X_whole), real_y=y_train_class)
+            acc_validate[i] = self.get_accuracy(predicted_y=self.predict(X_validate), real_y=y_test_class)
+        return loss, loss_validate, acc, acc_validate
         
 
     def evaluate(self, X, y):
@@ -177,25 +193,21 @@ def pca(X, n=2, raw=None):
     return low_dim
 
 
-def plot2d(X_y_pairs):
-    for idx in range(len(X_y_pairs)):
-        X = X_y_pairs[idx][0]
-        y = X_y_pairs[idx][1]
-        [batch_size, features] = X.shape
-        # colors = ['red','green','blue','cyan','purple','yellow']
-        colors = ['red','cyan','yellow','green','purple','blue']
-        groups = ['dws','ups','sit','std','wlk','jog']
-        plt.subplot(1, len(X_y_pairs), idx+1)
+def plot2d(X_y_pairs, name=None):
+    X = X_y_pairs[0]
+    y = X_y_pairs[1]
+    [batch_size, features] = X.shape
+    colors = ['red','cyan','yellow','green','purple','blue']
+    labels = ['dws','ups','sit','std','wlk','jog']
 
-        for i in range(batch_size):
-            label = np.asscalar(y[i])
-
-            plt.scatter(X[i, 0],
-                        X[i, 1],
-                        c=colors[label-1],
-                        label=groups[label-1],
-                        s=10)
-    plt.show()
+    # print(np.unique(y)) #012345
+    fig, ax = plt.subplots()
+    for pose in np.unique(y):
+        idx = np.where(y == pose)
+        ax.scatter(X[idx,0], X[idx,1], c=colors[pose], label=labels[pose], s=10)
+    ax.legend()
+    ax.set_title('Use {}'.format(name))
+    fig.savefig("{}.png".format(name))
 
 
 if __name__ == "__main__":
@@ -206,53 +218,71 @@ if __name__ == "__main__":
 
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
-    # setups.append(Hyper_parameters( optimizer='Adam',
-    #                                 learning_rate=0.02,
-    #                                 epochs=150,
-    #                                 batch_size=128))
+    
+    setups.append(Hyper_parameters( optimizer='Adam',
+                                    learning_rate=0.02,
+                                    epochs=200,
+                                    batch_size=128))
+    
     setups.append(Hyper_parameters( optimizer='GradientDescent',
                                     learning_rate=0.1,
                                     epochs=500,
-                                    batch_size=128))
+                                    batch_size=256))
 
     for setup in setups:
         dnn = DNN(features=68, classes=6, optimizer=setup.optimizer, learning_rate=setup.learning_rate)
-        train_loss = dnn.train( X=X_train.values.astype(np.float32),
-                                y=y_train.values.astype(np.float32),
-                                epochs=setup.epochs,
-                                batch_size=setup.batch_size)
-        print("Train avg cross entropy:{}".format(np.asscalar(train_loss[-1])))
-        plt.plot(train_loss)
+        loss, loss_validate, acc, acc_validate = dnn.train( X=X_train.values.astype(np.float32),
+                                                            y=y_train.values.astype(np.float32),
+                                                            X_validate=X_test.values.astype(np.float32),
+                                                            y_validate=y_test.values.astype(np.float32),
+                                                            epochs=setup.epochs,
+                                                            batch_size=setup.batch_size)
+        print("Train loss:{}".format(np.asscalar(loss[-1])))
+        print("Test loss:{}".format(np.asscalar(loss_validate[-1])))
+        fig, ax = plt.subplots()
+        ax.plot(range(setup.epochs), loss, label='train')
+        ax.plot(range(setup.epochs), loss_validate, label='validate')
+        ax.set_xlabel('epoch')
+        ax.set_ylabel('loss')
+        ax.set_title('model loss')
+        ax.legend()
+        fig.savefig('{}_loss.png'.format(setup.optimizer))
 
-        test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
-                                y=y_test.values.astype(np.float32))
-        print("Test avg cross entropy:{}".format(np.mean(test_loss)))
-
-        train_acc = dnn.get_accuracy(dnn.predict(X_train), np.argmax(y_train.values, axis=1)) 
-        print("Train accuracy:{}".format(train_acc))
+        print("Train accuracy:{}".format(np.asscalar(acc[-1])))
+        print("Test accuracy:{}".format(np.asscalar(acc_validate[-1])))
+        fig, ax = plt.subplots()
+        ax.plot(range(setup.epochs), acc, label='train')
+        ax.plot(range(setup.epochs), acc_validate, label='validate')
+        ax.set_xlabel('epoch')
+        ax.set_ylabel('accuracy')
+        ax.set_title('model acc')
+        ax.legend()
+        fig.savefig('{}_accuracy.png'.format(setup.optimizer))
 
         predicted_class = dnn.predict(X_test)
-        test_acc = dnn.get_accuracy(predicted_class, y_test_class)
         precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, y_test_class)
-        print("Test accuracy:{}".format(test_acc))
-        # for i in range(6):
-        #     print("Test class {} precision:{}".format(i, precision[i]))
-        #     print("Test class {} recall:{}".format(i, recall[i]))
-        #     print("Test class {} f1-score:{}".format(i, f1[i]))
-        # print("Test micro average precision:{}".format(micro_prec))
-        # print("Test micro average recall:{}".format(micro_recall))
-        # print("Test micro average f1:{}".format(micro_f1))
-        # print("Test macro average precision:{}".format(macro_prec))
-        # print("Test macro average recall:{}".format(macro_recall))
-        # print("Test macro average f1:{}".format(macro_f1))
-#%%
-    # X_y_pairs = []
-    ## low_dim_X = pca(X=X_test, n=2)
-    ## X_y_pairs.append((low_dim_X, y_test_class))
+        for i in range(6):
+            print("Test class {} precision:{}".format(i, precision[i]))
+            print("Test class {} recall:{}".format(i, recall[i]))
+            print("Test class {} f1-score:{}".format(i, f1[i]))
+        print("Test micro average precision:{}".format(micro_prec))
+        print("Test micro average recall:{}".format(micro_recall))
+        print("Test micro average f1:{}".format(micro_f1))
+        print("Test macro average precision:{}".format(macro_prec))
+        print("Test macro average recall:{}".format(macro_recall))
+        print("Test macro average f1:{}".format(macro_f1))
 
-    # low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
-    # X_y_pairs.append((low_dim_X, y_test_class))
+        # X_hidden = pd.read_csv('Test_no_Ac.csv')
+        # X_hidden = (X_hidden - X_hidden.mean()) / X_hidden.std()
+        # y_hidden = dnn.predict(X_hidden)
+        # f = open("105061110_answer.txt", "w")
+        # for idx in range(len(y_hidden)):
+        #     f.write("{}\t{}\n".format(idx, y_hidden[idx]+1))
+        # f.close()
 
-    # low_dim_X = TSNE(n_components=2).fit_transform(X_test.values)
-    # X_y_pairs.append((low_dim_X, y_test_class))
-    # plot2d(X_y_pairs)
+
+    low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
+    plot2d((low_dim_X, y_test_class), name='PCA')
+
+    low_dim_X = TSNE(n_components=2).fit_transform(X_test.values)
+    plot2d((low_dim_X, y_test_class), name='tSNE')
