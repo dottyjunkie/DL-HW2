@@ -19,12 +19,13 @@ class DNN():
                                 out_size=68,
                                 activation_function=tf.nn.relu)
         
-        self.l2 = self.add_layer(self.l1,
-                                in_size=68,
-                                out_size=68,
-                                activation_function=tf.nn.relu)
 
         if optimizer == 'Adam':
+            self.l2 = self.add_layer(self.l1,
+                                    in_size=68,
+                                    out_size=68,
+                                    activation_function=tf.nn.relu)
+            
             self.prediction = self.add_layer(self.l2,
                                             in_size=68,
                                             out_size=classes)                                    
@@ -32,7 +33,7 @@ class DNN():
             self.train_step = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
 
         elif optimizer == 'GradientDescent':
-            self.prediction = self.add_layer(self.l2,
+            self.prediction = self.add_layer(self.l1,
                                             in_size=68,
                                             out_size=classes,
                                             activation_function=tf.nn.softmax)
@@ -59,6 +60,7 @@ class DNN():
 
     def train(self, X, y, epochs=1000, batch_size=128):
         total_size, features = X.shape
+        loss = np.zeros((epochs, 1))
 
         for i in range(epochs):
             pairs = np.column_stack((X, y))
@@ -76,7 +78,7 @@ class DNN():
             #     loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
             #     print("Epoch {} avg cross entropy:{}".format(i, np.mean(loss) ))
 
-        loss = self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y})
+            loss[i] = np.mean(self.sess.run(self.loss, feed_dict={self.xs:X, self.ys:y}))
         return loss
         
 
@@ -201,18 +203,16 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(raw)
     y_train_class = np.argmax(y_train.values, axis=1) # Turn one-hot to integer class
     y_test_class = np.argmax(y_test.values, axis=1) # Turn one-hot to integer class
-    X_y_pairs = []
-
 
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
-    # setups.append(Hyper_parameters( optimizer='GradientDescent',
-    #                                 learning_rate=0.5,
-    #                                 epochs=2000,
-    #                                 batch_size=256))
-    setups.append(Hyper_parameters( optimizer='Adam',
-                                    learning_rate=0.02,
-                                    epochs=150,
+    # setups.append(Hyper_parameters( optimizer='Adam',
+    #                                 learning_rate=0.02,
+    #                                 epochs=150,
+    #                                 batch_size=128))
+    setups.append(Hyper_parameters( optimizer='GradientDescent',
+                                    learning_rate=0.1,
+                                    epochs=500,
                                     batch_size=128))
 
     for setup in setups:
@@ -221,7 +221,8 @@ if __name__ == "__main__":
                                 y=y_train.values.astype(np.float32),
                                 epochs=setup.epochs,
                                 batch_size=setup.batch_size)
-        print("Train avg cross entropy:{}".format(np.mean(train_loss)))
+        print("Train avg cross entropy:{}".format(np.asscalar(train_loss[-1])))
+        plt.plot(train_loss)
 
         test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
                                 y=y_test.values.astype(np.float32))
@@ -231,23 +232,24 @@ if __name__ == "__main__":
         print("Train accuracy:{}".format(train_acc))
 
         predicted_class = dnn.predict(X_test)
-        real_class = np.argmax(y_test.values, axis=1)
-        test_acc = dnn.get_accuracy(predicted_class, real_class)
-        precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, real_class)
+        test_acc = dnn.get_accuracy(predicted_class, y_test_class)
+        precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, y_test_class)
         print("Test accuracy:{}".format(test_acc))
-        for i in range(6):
-            print("Test class {} precision:{}".format(i, precision[i]))
-            print("Test class {} recall:{}".format(i, recall[i]))
-            print("Test class {} f1-score:{}".format(i, f1[i]))
-        print("Test micro average precision:{}".format(micro_prec))
-        print("Test micro average recall:{}".format(micro_recall))
-        print("Test micro average f1:{}".format(micro_f1))
-        print("Test macro average precision:{}".format(macro_prec))
-        print("Test macro average recall:{}".format(macro_recall))
-        print("Test macro average f1:{}".format(macro_f1))
-    low_dim_X = pca(X=X_test, n=2)
-    X_y_pairs.append((low_dim_X, y_test_class))
+        # for i in range(6):
+        #     print("Test class {} precision:{}".format(i, precision[i]))
+        #     print("Test class {} recall:{}".format(i, recall[i]))
+        #     print("Test class {} f1-score:{}".format(i, f1[i]))
+        # print("Test micro average precision:{}".format(micro_prec))
+        # print("Test micro average recall:{}".format(micro_recall))
+        # print("Test micro average f1:{}".format(micro_f1))
+        # print("Test macro average precision:{}".format(macro_prec))
+        # print("Test macro average recall:{}".format(macro_recall))
+        # print("Test macro average f1:{}".format(macro_f1))
 #%%
+    # X_y_pairs = []
+    ## low_dim_X = pca(X=X_test, n=2)
+    ## X_y_pairs.append((low_dim_X, y_test_class))
+
     # low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
     # X_y_pairs.append((low_dim_X, y_test_class))
 
