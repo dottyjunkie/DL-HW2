@@ -5,6 +5,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from collections import namedtuple
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 
 class DNN():
@@ -144,31 +146,25 @@ def train_test_split(raw, random_state=42):
     y_train = pd.get_dummies(y_train, columns=['Activities_Types'])
     X_train = train.drop(columns=['Activities_Types'])
     X_train = (X_train - X_train.mean()) / X_train.std()
-    # X_train = (X_train - X_train.mean())
 
     test = want.drop(train.index)
     y_test = test[['Activities_Types']]
     y_test = pd.get_dummies(y_test, columns=['Activities_Types'])
     X_test = test.drop(columns=['Activities_Types'])
     X_test = (X_test - X_test.mean()) / X_test.std()
-    # X_test = (X_test - X_test.mean())
 
     return (X_train, X_test, y_train, y_test)
 
 
-def PCA(X, y, n=2, raw=None):
+def pca(X, n=2, raw=None):
     if raw is not None:
         entries = raw.columns
         want = raw[entries]
         X = want.drop(columns=['Activities_Types'])
         y = want[['Activities_Types']]    
         X = X.values
-        y = y.values
     else:
         X = X.values
-        y = np.argmax(y.values, axis=1)
-
-    [batch_size, features] = X.shape
 
     covMat = np.cov(X, rowvar=0)
     eigVals, eigVects = np.linalg.eig(np.mat(covMat))
@@ -176,131 +172,85 @@ def PCA(X, y, n=2, raw=None):
     W = eigVects[:, idx[:n]]
     low_dim = X*W
 
-    # colors = ['red','green','blue','cyan','purple','yellow']
-    colors = ['red','cyan','yellow','green','purple','blue']
-    groups = ['dws','ups','sit','std','wlk','jog']
-    for i in range(batch_size):
-        label = np.asscalar(y[i])
-
-        plt.scatter(low_dim[i, 0],
-                    low_dim[i, 1],
-                    c=colors[label-1],
-                    label=groups[label-1],
-                    s=10)
-    plt.show()
     return low_dim
 
-def tSNE(X):
-    def get_pairwise_dist(X):
-        return np.add(np.add(-2 * np.dot(X, X.T), sum_X).T, sum_X)
-    
-    def get_conditional_prob(dist, sigma):
-        P = np.exp(-dist.copy() * sigma)
-        return  P/sum(P)
-    
-    def get_perplexity(prob_i):
-        # entropy_i = -np.dot(prob_i, np.log2(prob_i))
-        # return 2**entropy_i
-        P = np.exp(-D.copy() * beta)
-        sumP = sum(P)
-        H = np.log(sumP) + beta * np.sum(D * P) / sumP
-        P = P / sumP
-        return H, P
 
-
-
-    def opt_prob(X, perplexity=30.0):
+def plot2d(X_y_pairs):
+    for idx in range(len(X_y_pairs)):
+        X = X_y_pairs[idx][0]
+        y = X_y_pairs[idx][1]
         [batch_size, features] = X.shape
-        dist = get_pairwise_dist(X)
-        sigma = np.ones((batch_size, 1))
-        prob = np.zeros((batch_size, batch_size)) # prob[i][j] = P(J=j|I=i)
+        # colors = ['red','green','blue','cyan','purple','yellow']
+        colors = ['red','cyan','yellow','green','purple','blue']
+        groups = ['dws','ups','sit','std','wlk','jog']
+        plt.subplot(1, len(X_y_pairs), idx+1)
 
-        for i in range(3):
-            print("The {}th sigma".format(i))
-            prob = get_conditional_prob(dist)
-            perplexity_i = get_perplexity(prob[i,:])
-            diff = perplexity - perplexity_i
-            # print(perplexity_i)
-            sigma_max = np.inf
-            sigma_min = -np.inf
-            tolerance = 1e-5
-            maxIter = 20
-            tries = 0
-            while abs(diff) > tolerance and tries < maxIter:
-                print(perplexity_i)
-                if diff > 0:
-                    sigma_min = sigma[i].copy()
-                    if sigma_max == np.inf or sigma_min == -np.inf:
-                        sigma[i] = sigma[i] * 2
-                    else:
-                        sigma[i] = (sigma[i] + sigma_max) / 2
-                else:
-                    sigma_max = sigma[i].copy()
-                    if sigma_max == np.inf or sigma_min == -np.inf:
-                        sigma[i] = sigma[i] / 2
-                    else:
-                        sigma[i] = (sigma[i] + sigma_min) / 2
-                prob[i, :] = get_conditional_prob(i, dist[i, :], sigma[i])
-                perplexity_i = get_perplexity(prob[i,:])
-                diff = perplexity_i - perplexity
-                tries += 1
-        return prob
+        for i in range(batch_size):
+            label = np.asscalar(y[i])
 
-    
-
-    if __name__ == "__main__":
-        opt_prob(X)
-
+            plt.scatter(X[i, 0],
+                        X[i, 1],
+                        c=colors[label-1],
+                        label=groups[label-1],
+                        s=10)
+    plt.show()
 
 
 if __name__ == "__main__":
     raw = pd.read_csv('Data.csv')
     X_train, X_test, y_train, y_test = train_test_split(raw)
+    y_train_class = np.argmax(y_train.values, axis=1) # Turn one-hot to integer class
+    y_test_class = np.argmax(y_test.values, axis=1) # Turn one-hot to integer class
+    X_y_pairs = []
 
-    # low_dim_X = PCA(X=X_test, y=y_test, n=2)
-    low_dim_X = np.array([[1, 2], [2, 3], [3, 4]])
-    tSNE(X=low_dim_X)
 
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
-    setups.append(Hyper_parameters( optimizer='GradientDescent',
-                                    learning_rate=0.5,
-                                    epochs=2000,
-                                    batch_size=256))
-    # setups.append(Hyper_parameters( optimizer='Adam',
-    #                                 learning_rate=0.02,
-    #                                 epochs=150,
-    #                                 batch_size=128))
+    # setups.append(Hyper_parameters( optimizer='GradientDescent',
+    #                                 learning_rate=0.5,
+    #                                 epochs=2000,
+    #                                 batch_size=256))
+    setups.append(Hyper_parameters( optimizer='Adam',
+                                    learning_rate=0.02,
+                                    epochs=150,
+                                    batch_size=128))
 
-    # for setup in setups:
-    #     dnn = DNN(features=68, classes=6, optimizer=setup.optimizer, learning_rate=setup.learning_rate)
-    #     train_loss = dnn.train( X=X_train.values.astype(np.float32),
-    #                             y=y_train.values.astype(np.float32),
-    #                             epochs=setup.epochs,
-    #                             batch_size=setup.batch_size)
-    #     print("Train avg cross entropy:{}".format(np.mean(train_loss)))
+    for setup in setups:
+        dnn = DNN(features=68, classes=6, optimizer=setup.optimizer, learning_rate=setup.learning_rate)
+        train_loss = dnn.train( X=X_train.values.astype(np.float32),
+                                y=y_train.values.astype(np.float32),
+                                epochs=setup.epochs,
+                                batch_size=setup.batch_size)
+        print("Train avg cross entropy:{}".format(np.mean(train_loss)))
 
-    #     test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
-    #                             y=y_test.values.astype(np.float32))
-    #     print("Test avg cross entropy:{}".format(np.mean(test_loss)))
+        test_loss = dnn.evaluate(X=X_test.values.astype(np.float32),
+                                y=y_test.values.astype(np.float32))
+        print("Test avg cross entropy:{}".format(np.mean(test_loss)))
 
-    #     train_acc = dnn.get_accuracy(dnn.predict(X_train), np.argmax(y_train.values, axis=1)) 
-    #     print("Train accuracy:{}".format(train_acc))
+        train_acc = dnn.get_accuracy(dnn.predict(X_train), np.argmax(y_train.values, axis=1)) 
+        print("Train accuracy:{}".format(train_acc))
 
-    #     predicted_class = dnn.predict(X_test)
-    #     real_class = np.argmax(y_test.values, axis=1)
-    #     test_acc = dnn.get_accuracy(predicted_class, real_class)
-    #     precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, real_class)
-    #     print("Test accuracy:{}".format(test_acc))
-    #     for i in range(6):
-    #         print("Test class {} precision:{}".format(i, precision[i]))
-    #         print("Test class {} recall:{}".format(i, recall[i]))
-    #         print("Test class {} f1-score:{}".format(i, f1[i]))
-    #     print("Test micro average precision:{}".format(micro_prec))
-    #     print("Test micro average recall:{}".format(micro_recall))
-    #     print("Test micro average f1:{}".format(micro_f1))
-    #     print("Test macro average precision:{}".format(macro_prec))
-    #     print("Test macro average recall:{}".format(macro_recall))
-    #     print("Test macro average f1:{}".format(macro_f1))
-
+        predicted_class = dnn.predict(X_test)
+        real_class = np.argmax(y_test.values, axis=1)
+        test_acc = dnn.get_accuracy(predicted_class, real_class)
+        precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, real_class)
+        print("Test accuracy:{}".format(test_acc))
+        for i in range(6):
+            print("Test class {} precision:{}".format(i, precision[i]))
+            print("Test class {} recall:{}".format(i, recall[i]))
+            print("Test class {} f1-score:{}".format(i, f1[i]))
+        print("Test micro average precision:{}".format(micro_prec))
+        print("Test micro average recall:{}".format(micro_recall))
+        print("Test micro average f1:{}".format(micro_f1))
+        print("Test macro average precision:{}".format(macro_prec))
+        print("Test macro average recall:{}".format(macro_recall))
+        print("Test macro average f1:{}".format(macro_f1))
+    low_dim_X = pca(X=X_test, n=2)
+    X_y_pairs.append((low_dim_X, y_test_class))
 #%%
+    # low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
+    # X_y_pairs.append((low_dim_X, y_test_class))
+
+    # low_dim_X = TSNE(n_components=2).fit_transform(X_test.values)
+    # X_y_pairs.append((low_dim_X, y_test_class))
+    # plot2d(X_y_pairs)
