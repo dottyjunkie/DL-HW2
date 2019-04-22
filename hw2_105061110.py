@@ -232,7 +232,7 @@ if __name__ == "__main__":
     setups.append(Hyper_parameters( optimizer='GradientDescent',
                                     learning_rate=0.01,
                                     epochs=500,
-                                    batch_size=32))
+                                    batch_size=64))
 
     for setup in setups:
         dnn = DNN(features=68, classes=6, optimizer=setup.optimizer, learning_rate=setup.learning_rate)
