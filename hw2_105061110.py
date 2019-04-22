@@ -38,14 +38,19 @@ class DNN():
         elif optimizer == 'GradientDescent':
             self.l1 = self.add_layer(self.xs,
                                     in_size=features,
-                                    out_size=34,
+                                    out_size=68,
                                     activation_function=tf.nn.relu)
 
-            self.prediction = self.add_layer(self.l1,
-                                            in_size=34,
+            self.l2 = self.add_layer(self.l1,
+                                    in_size=68,
+                                    out_size=68,
+                                    activation_function=tf.nn.relu)
+            
+            self.prediction = self.add_layer(self.l2,
+                                            in_size=68,
                                             out_size=classes
                                             ,activation_function=tf.nn.softmax
-                                            )
+                                            )     
             # self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.ys, logits=self.prediction)
             self.loss = tf.reduce_mean(-tf.reduce_sum(self.ys * tf.log(self.prediction+1e-30), reduction_indices=[1]))
             self.train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss)
@@ -219,15 +224,15 @@ if __name__ == "__main__":
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
     
-    setups.append(Hyper_parameters( optimizer='Adam',
-                                    learning_rate=0.02,
-                                    epochs=200,
-                                    batch_size=128))
+    # setups.append(Hyper_parameters( optimizer='Adam',
+    #                                 learning_rate=0.02,
+    #                                 epochs=200,
+    #                                 batch_size=128))
     
     setups.append(Hyper_parameters( optimizer='GradientDescent',
-                                    learning_rate=0.1,
+                                    learning_rate=0.01,
                                     epochs=500,
-                                    batch_size=256))
+                                    batch_size=32))
 
     for setup in setups:
         dnn = DNN(features=68, classes=6, optimizer=setup.optimizer, learning_rate=setup.learning_rate)
@@ -246,7 +251,7 @@ if __name__ == "__main__":
         ax.set_ylabel('loss')
         ax.set_title('model loss')
         ax.legend()
-        fig.savefig('{}_loss.png'.format(setup.optimizer))
+        # fig.savefig('{}_loss.png'.format(setup.optimizer))
 
         print("Train accuracy:{}".format(np.asscalar(acc[-1])))
         print("Test accuracy:{}".format(np.asscalar(acc_validate[-1])))
@@ -257,7 +262,7 @@ if __name__ == "__main__":
         ax.set_ylabel('accuracy')
         ax.set_title('model acc')
         ax.legend()
-        fig.savefig('{}_accuracy.png'.format(setup.optimizer))
+        # fig.savefig('{}_accuracy.png'.format(setup.optimizer))
 
         predicted_class = dnn.predict(X_test)
         precision, recall, f1, micro_prec, micro_recall, micro_f1, macro_prec, macro_recall, macro_f1 = dnn.get_metrics(predicted_class, y_test_class)
@@ -281,8 +286,8 @@ if __name__ == "__main__":
         # f.close()
 
 
-    low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
-    plot2d((low_dim_X, y_test_class), name='PCA')
+    # low_dim_X = PCA(n_components=2).fit_transform(X_test.values)
+    # plot2d((low_dim_X, y_test_class), name='PCA')
 
-    low_dim_X = TSNE(n_components=2).fit_transform(X_test.values)
-    plot2d((low_dim_X, y_test_class), name='tSNE')
+    # low_dim_X = TSNE(n_components=2).fit_transform(X_test.values)
+    # plot2d((low_dim_X, y_test_class), name='tSNE')
