@@ -223,10 +223,10 @@ if __name__ == "__main__":
     setups = []
     Hyper_parameters = namedtuple('Hyper_parameters', 'optimizer, learning_rate, epochs, batch_size')
     
-    setups.append(Hyper_parameters( optimizer='Adam',
-                                    learning_rate=0.02,
-                                    epochs=200,
-                                    batch_size=128))
+    # setups.append(Hyper_parameters( optimizer='Adam',
+    #                                 learning_rate=0.02,
+    #                                 epochs=200,
+    #                                 batch_size=128))
     
     # setups.append(Hyper_parameters( optimizer='GradientDescent',
     #                                 learning_rate=0.01,
